@@ -21,10 +21,10 @@ from pfrl.experiments.evaluator import Evaluator, save_agent
 
 from utils import normalize_states, fill_dr4l_pybullet_data
 from agent import TD3PlusBC
+from env_wrapper import ObservationNormalizeWrapper
 
 
 def main():
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--outdir",
@@ -201,6 +201,10 @@ def main():
             )
 
     eval_env = make_env(test=True)
+
+    env = ObservationNormalizeWrapper(env, mean=mean, std=std)
+    eval_env = ObservationNormalizeWrapper(env, mean=mean, std=std)
+    
     if args.demo:
         eval_stats = experiments.eval_performance(
             env=eval_env,
