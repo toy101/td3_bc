@@ -19,7 +19,7 @@ import pfrl
 from pfrl import experiments, explorers, replay_buffers, utils
 from pfrl.experiments.evaluator import Evaluator, save_agent
 
-from utils import fill_dr4l_pybullet_data
+from utils import normalize_states, fill_dr4l_pybullet_data
 from agent import TD3PlusBC
 
 
@@ -42,9 +42,9 @@ def main():
         help="OpenAI Gym MuJoCo env to perform algorithm on.",
     )
     parser.add_argument("--seed", type=int, default=0, help="Random seed [0, 2 ** 32)")
-    parser.add_argument(
-        "--gpu", type=int, default=-1, help="GPU to use, set to -1 if no GPU."
-    )
+    # parser.add_argument(
+    #     "--gpu", type=int, default=-1, help="GPU to use, set to -1 if no GPU."
+    # )
     parser.add_argument(
         "--load", type=str, default="", help="Directory to load agent from."
     )
@@ -101,8 +101,10 @@ def main():
     # Set a random seed used in PFRL
     utils.set_random_seed(args.seed)
 
+    gpu = 0 if torch.cuda.is_available() else -1
+
     def make_env(test):
-        env = gym.make('hopper-bullet-medium-v0')
+        env = gym.make('hopper-bullet-random-v0')
         # Unwrap TimeLimit wrapper
         assert isinstance(env, gym.wrappers.TimeLimit)
         env = env.env
@@ -118,7 +120,6 @@ def main():
         return env
 
     env = make_env(test=False)
-    dataset = env.get_dataset()
     timestep_limit = env.spec.max_episode_steps
     obs_space = env.observation_space
     action_space = env.action_space
@@ -155,7 +156,9 @@ def main():
     q_func2, q_func2_optimizer = make_q_func_with_optimizer()
 
     # rbuf = replay_buffers.ReplayBuffer(10 ** 6)
-    rbuf = fill_dr4l_pybullet_data(dataset)
+    dataset = env.get_dataset()
+    dataset["observations"], mean, std = normalize_states(dataset["observations"])
+    rbuf = fill_dr4l_pybullet_data(dataset, mean, std)
 
     explorer = explorers.AdditiveGaussian(
         scale=0.1, low=action_space.low, high=action_space.high
@@ -178,9 +181,11 @@ def main():
         soft_update_tau=5e-3,
         explorer=explorer,
         replay_start_size=args.replay_start_size,
-        gpu=args.gpu,
+        gpu=gpu,
         minibatch_size=args.batch_size,
         burnin_action_func=burnin_action_func,
+        mean=mean,
+        std=std
     )
 
     if len(args.load) > 0 or args.load_pretrained:
