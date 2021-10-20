@@ -60,6 +60,7 @@ def main():
         default=10,
         help="Number of episodes run for each evaluation.",
     )
+    parser.add_argument('--n-epochs', type=int, default=5)
     parser.add_argument(
         "--eval-interval",
         type=int,
@@ -202,9 +203,9 @@ def main():
 
     eval_env = make_env(test=True)
 
-    env = ObservationNormalizeWrapper(env, mean=mean, std=std)
-    eval_env = ObservationNormalizeWrapper(env, mean=mean, std=std)
-    
+    # env = ObservationNormalizeWrapper(env, mean=mean, std=std)
+    # eval_env = ObservationNormalizeWrapper(eval_env, mean=mean, std=std)
+
     if args.demo:
         eval_stats = experiments.eval_performance(
             env=eval_env,
@@ -249,7 +250,7 @@ def main():
                               save_best_so_far_agent=True,
                               logger=logger)
 
-        for ep in range(args.n_pretrain_epochs):
+        for ep in range(args.n_epochs):
             agent.offline_train(ep)
             evaluator.evaluate_and_update_max_score(t=0, episodes=ep)
 

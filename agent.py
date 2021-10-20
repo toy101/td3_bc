@@ -86,8 +86,7 @@ class DemoReplayUpdater(object):
             # self.update_func(episodes_demo)
         assert not self.episodic_update, "Not adapt episodic update"
 
-        transitions_demo = self.replay_buffer.sample(
-            self.batch_size, demo_only=True)
+        transitions_demo = self.replay_buffer.sample(self.batch_size)
         self.update_func(transitions_demo)
 
 
@@ -128,7 +127,7 @@ class TD3PlusBC(TD3):
             target policy smoothing when computing target Q-values.
 
         OfflineRL parameters
-        n_pretrain_steps (int)
+        n_train_steps (int)
 
         TD3+BC specific parameters
         alpha (float): Actor update parameter
@@ -172,11 +171,12 @@ class TD3PlusBC(TD3):
             policy_update_delay=2,
             target_policy_smoothing_func=default_target_policy_smoothing_func,
             # OfflineRL parameters
-            n_pretrain_steps=2,
+            n_train_steps=1,
             # TD3+BC specific parameters
             alpha=2.5,
             mean=0.0,
-            std=1.0
+            std=1.0,
+            log_interval=5000
     ):
 
         super(TD3PlusBC, self).__init__(policy,
@@ -202,7 +202,7 @@ class TD3PlusBC(TD3):
                                         policy_update_delay=2,
                                         target_policy_smoothing_func=default_target_policy_smoothing_func
                                         )
-        self.n_pretrain_steps=n_pretrain_steps
+        self.n_train_steps=n_train_steps*len(self.replay_buffer)
         self.policy = policy
         self.q_func1 = q_func1
         self.q_func2 = q_func2
@@ -275,6 +275,7 @@ class TD3PlusBC(TD3):
         self.policy_loss_record = collections.deque(maxlen=100)
 
         self.tpre = 0
+        self.log_interval = log_interval
 
     def update_policy(self, batch):
         """Compute loss for actor."""
@@ -303,23 +304,24 @@ class TD3PlusBC(TD3):
         batch = batch_experiences(experiences, self.device, self.phi, self.gamma)
         self.update_q_func(batch)
         if self.q_func_n_updates % self.policy_update_delay == 0:
-            self.logger.info('offlineRL-step:%s statistics:%s',
-                             self.tpre, self.get_statistics())
+            if self.q_func_n_updates % self.log_interval == 0:
+                self.logger.info('offlineRL-step:%s statistics:%s',
+                                 self.tpre, self.get_statistics())
             self.update_policy(batch)
             self.sync_target_network()
 
     def batch_select_onpolicy_action(self, batch_obs):
         with torch.no_grad(), pfrl.utils.evaluating(self.policy):
-            # state normalization
-            batch_obs = (batch_obs - self.mean) / self.std
-
             batch_xs = self.batch_states(batch_obs, self.device, self.phi)
+
+            # state normalization
+            batch_xs = (batch_xs - self.mean) / self.std
             batch_action = self.policy(batch_xs).sample().cpu().numpy()
         return list(batch_action)
 
     def offline_train(self, epoch):
         """Uses purely expert demonstrations to do pre-training
         """
-        for tpre in range(self.n_pretrain_steps * epoch + 1, self.n_pretrain_steps * (epoch + 1) + 1):
+        for tpre in range(self.n_train_steps * epoch + 1, self.n_train_steps * (epoch + 1) + 1):
             self.tpre = tpre
             self.replay_updater.update_from_demonstrations()
