@@ -23,7 +23,8 @@ def fill_dr4l_pybullet_data(dataset, mean, std, capacity=None):
     dataset_len = dataset["terminals"].size
     obs_size = dataset["observations"][0].size
 
-    terminal_next_obs = torch.empty(size=(obs_size,))
+    terminal_next_obs = torch.empty(size=(obs_size,), device=device)
+
 
     for i, (m, s) in enumerate(zip(mean, std)):
         ramdom = torch.normal(mean=m, std=s)
